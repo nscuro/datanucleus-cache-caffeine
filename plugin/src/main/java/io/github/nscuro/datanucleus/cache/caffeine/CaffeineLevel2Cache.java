@@ -31,6 +31,8 @@ import org.slf4j.LoggerFactory;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashSet;
+import java.util.Map;
 
 import static io.github.nscuro.datanucleus.cache.caffeine.CaffeineCachePropertyNames.PROPERTY_CACHE_L2_CAFFEINE_EXPIRY_MODE;
 import static io.github.nscuro.datanucleus.cache.caffeine.CaffeineCachePropertyNames.PROPERTY_CACHE_L2_CAFFEINE_INITIAL_CAPACITY;
@@ -46,7 +48,7 @@ public class CaffeineLevel2Cache extends AbstractLevel2Cache {
 
     private final Cache<Object, Object> caffeineCache;
 
-    public CaffeineLevel2Cache(NucleusContext nucleusCtx) {
+    public CaffeineLevel2Cache(final NucleusContext nucleusCtx) {
         super(nucleusCtx);
 
         final Configuration config = nucleusCtx.getConfiguration();
@@ -88,12 +90,12 @@ public class CaffeineLevel2Cache extends AbstractLevel2Cache {
     }
 
     @Override
-    public void evict(Object oid) {
+    public void evict(final Object oid) {
         caffeineCache.invalidate(oid);
     }
 
     @Override
-    public void removeUnique(CacheUniqueKey key) {
+    public void removeUnique(final CacheUniqueKey key) {
         evict(key);
     }
 
@@ -103,32 +105,58 @@ public class CaffeineLevel2Cache extends AbstractLevel2Cache {
     }
 
     @Override
-    public void evictAll(Object[] oids) {
+    public void evictAll(final Object[] oids) {
+        if (oids == null || oids.length == 0) {
+            return;
+        }
+
         caffeineCache.invalidateAll(Arrays.asList(oids));
     }
 
     @Override
-    public void evictAll(Collection oids) {
+    public void evictAll(final Collection oids) {
+        if (oids == null || oids.isEmpty()) {
+            return;
+        }
+
         caffeineCache.invalidateAll(oids);
     }
 
     @Override
-    public void evictAll(Class pcClass, boolean subclasses) {
-        // Not supported.
+    @SuppressWarnings("unchecked")
+    public void evictAll(final Class pcClass, final boolean subclasses) {
+        if (pcClass == null) {
+            return;
+        }
+
+        final var keysToEvict = new HashSet<>();
+        for (final Map.Entry<Object, Object> entry : caffeineCache.asMap().entrySet()) {
+            final var pc = (CachedPC) entry.getValue();
+            if (pcClass.getName().equals(pc.getObjectClass().getName())
+                || (subclasses && pcClass.isAssignableFrom(pc.getObjectClass()))) {
+                keysToEvict.add(entry.getKey());
+            }
+        }
+
+        evictAll(keysToEvict);
     }
 
     @Override
-    public CachedPC get(Object oid) {
+    public CachedPC get(final Object oid) {
+        if (oid == null) {
+            return null;
+        }
+
         return (CachedPC) caffeineCache.getIfPresent(oid);
     }
 
     @Override
-    public CachedPC getUnique(CacheUniqueKey key) {
+    public CachedPC getUnique(final CacheUniqueKey key) {
         return get(key);
     }
 
     @Override
-    public CachedPC put(Object oid, CachedPC pc) {
+    public CachedPC put(final Object oid, final CachedPC pc) {
         if (oid == null || pc == null) {
             return null;
         }
@@ -138,12 +166,12 @@ public class CaffeineLevel2Cache extends AbstractLevel2Cache {
     }
 
     @Override
-    public CachedPC putUnique(CacheUniqueKey key, CachedPC pc) {
+    public CachedPC putUnique(final CacheUniqueKey key, final CachedPC pc) {
         return put(key, pc);
     }
 
     @Override
-    public boolean containsOid(Object oid) {
+    public boolean containsOid(final Object oid) {
         return caffeineCache.getIfPresent(oid) != null;
     }
 

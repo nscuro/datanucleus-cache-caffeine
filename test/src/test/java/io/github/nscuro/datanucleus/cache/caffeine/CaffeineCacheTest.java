@@ -170,6 +170,25 @@ class CaffeineCacheTest {
     }
 
     @Test
+    void testEvictAllByClass() {
+        pmf = createPmf(Collections.emptyMap());
+
+        try (final PersistenceManager pm = pmf.getPersistenceManager()) {
+            for (int i = 0; i < 10; i++) {
+                final var person = new Person();
+                person.setName("name-" + i);
+                pm.makePersistent(person);
+            }
+        }
+
+        final var secondLevelCache = (CaffeineLevel2Cache) ((JDODataStoreCache) pmf.getDataStoreCache()).getLevel2Cache();
+        assertThat(secondLevelCache.getSize()).isEqualTo(10);
+
+        secondLevelCache.evictAll(Person.class, false);
+        assertThat(secondLevelCache.getSize()).isEqualTo(0);
+    }
+
+    @Test
     void testClose() {
         pmf = createPmf(Collections.emptyMap());
 
