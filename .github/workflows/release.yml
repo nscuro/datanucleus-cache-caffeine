@@ -1,0 +1,52 @@
+name: Release
+
+on:
+  workflow_dispatch: { }
+
+permissions: { }
+
+jobs:
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write # Required to create releases
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+    - name: Set up JDK
+      uses: actions/setup-java@b36c23c0d998641eff861008f374ee103c25ac73 # v4.4.0
+      with:
+        java-version: "17"
+        distribution: temurin
+        cache: maven
+        server-id: ossrh
+        server-username: OSSRH_USERNAME
+        server-password: OSSRH_PASSWORD
+        gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
+        gpg-passphrase: GPG_PASSPHRASE
+    - name: Perform Release
+      id: perform-release
+      env:
+        OSSRH_USERNAME: ${{ secrets.OSSRH_USERNAME }}
+        OSSRH_PASSWORD: ${{ secrets.OSSRH_PASSWORD }}
+        GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+      run: |-
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        
+        mvn -B --no-transfer-progress -Pgithub-actions release:clean release:prepare
+        
+        TAG_NAME="$(sed -nr 's/^scm.tag=(v[0-9.]+)$/\1/p' release.properties)"
+        echo "TAG_NAME=${TAG_NAME}" >> $GITHUB_OUTPUT
+        
+        mvn -B --no-transfer-progress release:perform
+    - name: Create GitHub Release
+      env:
+        GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+      run: |-
+        gh release create "${{ steps.perform-release.outputs.TAG_NAME }}" \
+          --target ${{ github.ref_name }} \
+          --verify-tag \
+          --generate-notes

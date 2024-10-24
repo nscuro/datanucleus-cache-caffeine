@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<plugin id="io.github.nscuro.datanucleus.cache.caffeine" name="DataNucleus Caffeine Cache" provider-name="nscuro">
+    <extension point="org.datanucleus.cache_level2">
+        <cache name="caffeine" class-name="io.github.nscuro.datanucleus.cache.caffeine.CaffeineLevel2Cache"/>
+    </extension>
+
+    <extension point="org.datanucleus.persistence_properties">
+        <persistence-property name="datanucleus.cache.level2.caffeine.initialcapacity"/>
+    </extension>
+</plugin>
