@@ -169,6 +169,25 @@ class CaffeineCacheTest {
                 });
     }
 
+    @Test
+    void testClose() {
+        pmf = createPmf(Collections.emptyMap());
+
+        try (final PersistenceManager pm = pmf.getPersistenceManager()) {
+            for (int i = 0; i < 10; i++) {
+                final var person = new Person();
+                person.setName("name-" + i);
+                pm.makePersistent(person);
+            }
+        }
+
+        final var secondLevelCache = (CaffeineLevel2Cache) ((JDODataStoreCache) pmf.getDataStoreCache()).getLevel2Cache();
+        assertThat(secondLevelCache.getSize()).isEqualTo(10);
+
+        secondLevelCache.close();
+        assertThat(secondLevelCache.getSize()).isEqualTo(0);
+    }
+
     private PersistenceManagerFactory createPmf(final Map<String, String> configOverrides) {
         final URL schemaUrl = CaffeineCacheTest.class.getResource("/schema.sql");
         assertThat(schemaUrl).isNotNull();

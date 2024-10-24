@@ -84,7 +84,7 @@ public class CaffeineLevel2Cache extends AbstractLevel2Cache {
 
     @Override
     public void close() {
-        // Nothing to do.
+        evictAll();
     }
 
     @Override
