@@ -23,6 +23,7 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import org.datanucleus.Configuration;
 import org.datanucleus.NucleusContext;
 import org.datanucleus.cache.AbstractLevel2Cache;
+import org.datanucleus.cache.CacheUniqueKey;
 import org.datanucleus.cache.CachedPC;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -92,6 +93,11 @@ public class CaffeineLevel2Cache extends AbstractLevel2Cache {
     }
 
     @Override
+    public void removeUnique(CacheUniqueKey key) {
+        evict(key);
+    }
+
+    @Override
     public void evictAll() {
         caffeineCache.invalidateAll();
     }
@@ -117,6 +123,11 @@ public class CaffeineLevel2Cache extends AbstractLevel2Cache {
     }
 
     @Override
+    public CachedPC getUnique(CacheUniqueKey key) {
+        return get(key);
+    }
+
+    @Override
     public CachedPC put(Object oid, CachedPC pc) {
         if (oid == null || pc == null) {
             return null;
@@ -124,6 +135,11 @@ public class CaffeineLevel2Cache extends AbstractLevel2Cache {
 
         caffeineCache.put(oid, pc);
         return pc;
+    }
+
+    @Override
+    public CachedPC putUnique(CacheUniqueKey key, CachedPC pc) {
+        return put(key, pc);
     }
 
     @Override
