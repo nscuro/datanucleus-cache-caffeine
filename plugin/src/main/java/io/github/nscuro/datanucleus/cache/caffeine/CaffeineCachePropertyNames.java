@@ -20,6 +20,7 @@ package io.github.nscuro.datanucleus.cache.caffeine;
 
 public final class CaffeineCachePropertyNames {
 
+    public static final String PROPERTY_CACHE_L2_CAFFEINE_EXPIRY_MODE = "datanucleus.cache.level2.caffeine.expirymode";
     public static final String PROPERTY_CACHE_L2_CAFFEINE_INITIAL_CAPACITY = "datanucleus.cache.level2.caffeine.initialcapacity";
 
     private CaffeineCachePropertyNames() {

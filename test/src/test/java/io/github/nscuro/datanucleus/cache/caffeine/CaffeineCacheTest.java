@@ -34,12 +34,15 @@ import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 
+import static io.github.nscuro.datanucleus.cache.caffeine.CaffeineCachePropertyNames.PROPERTY_CACHE_L2_CAFFEINE_EXPIRY_MODE;
 import static java.util.Map.entry;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 import static org.datanucleus.PropertyNames.PROPERTY_CACHE_L2_EXPIRY_MILLIS;
 import static org.datanucleus.PropertyNames.PROPERTY_CACHE_L2_MAXSIZE;
+import static org.datanucleus.PropertyNames.PROPERTY_CACHE_L2_STATISTICS_ENABLED;
 import static org.datanucleus.PropertyNames.PROPERTY_CACHE_L2_TYPE;
 import static org.datanucleus.PropertyNames.PROPERTY_CONNECTION_DRIVER_NAME;
 import static org.datanucleus.PropertyNames.PROPERTY_CONNECTION_PASSWORD;
@@ -102,8 +105,11 @@ class CaffeineCacheTest {
     }
 
     @Test
-    void testExpiry() {
-        pmf = createPmf(Map.of(PROPERTY_CACHE_L2_EXPIRY_MILLIS, "3000"));
+    void testExpiryAfterWrite() {
+        pmf = createPmf(Map.of(
+                PROPERTY_CACHE_L2_EXPIRY_MILLIS, "3000",
+                PROPERTY_CACHE_L2_CAFFEINE_EXPIRY_MODE, "after-write",
+                PROPERTY_CACHE_L2_STATISTICS_ENABLED, "true"));
 
         try (final PersistenceManager pm = pmf.getPersistenceManager()) {
             for (int i = 0; i < 10; i++) {
@@ -113,12 +119,54 @@ class CaffeineCacheTest {
             }
         }
 
-        final Level2Cache secondLevelCache = ((JDODataStoreCache) pmf.getDataStoreCache()).getLevel2Cache();
+        final var secondLevelCache = (CaffeineLevel2Cache) ((JDODataStoreCache) pmf.getDataStoreCache()).getLevel2Cache();
         assertThat(secondLevelCache.getSize()).isEqualTo(10);
 
         await("Cache entry expiry")
                 .atMost(Duration.ofSeconds(4))
-                .untilAsserted(() -> assertThat(secondLevelCache.getSize()).isEqualTo(0));
+                .untilAsserted(() -> {
+                    assertThat(secondLevelCache.getSize()).isEqualTo(0);
+                    assertThat(secondLevelCache.getCaffeineCache().stats().evictionCount()).isEqualTo(10);
+                });
+    }
+
+    @Test
+    void testExpiryAfterAccess() {
+        pmf = createPmf(Map.of(
+                PROPERTY_CACHE_L2_EXPIRY_MILLIS, "3000",
+                PROPERTY_CACHE_L2_CAFFEINE_EXPIRY_MODE, "after-access",
+                PROPERTY_CACHE_L2_STATISTICS_ENABLED, "true"));
+
+        final var firstObjectId = new AtomicLong(0);
+        try (final PersistenceManager pm = pmf.getPersistenceManager()) {
+            for (int i = 0; i < 10; i++) {
+                final var person = new Person();
+                person.setName("name-" + i);
+                pm.makePersistent(person);
+
+                if (i == 0) {
+                    firstObjectId.set(person.getId());
+                }
+            }
+        }
+
+        final var secondLevelCache = (CaffeineLevel2Cache) ((JDODataStoreCache) pmf.getDataStoreCache()).getLevel2Cache();
+        assertThat(secondLevelCache.getSize()).isEqualTo(10);
+
+        await("Cache entry expiry")
+                .atMost(Duration.ofSeconds(4))
+                .failFast(() -> secondLevelCache.getSize() == 0)
+                .pollDelay(Duration.ofMillis(250))
+                .untilAsserted(() -> {
+                    // Keep accessing the first object so it stays in the cache.
+                    try (final PersistenceManager pm = pmf.getPersistenceManager()) {
+                        final Person person = pm.getObjectById(Person.class, firstObjectId.get());
+                        assertThat(person).isNotNull();
+                    }
+
+                    assertThat(secondLevelCache.getSize()).isEqualTo(1);
+                    assertThat(secondLevelCache.getCaffeineCache().stats().evictionCount()).isEqualTo(9);
+                });
     }
 
     private PersistenceManagerFactory createPmf(final Map<String, String> configOverrides) {

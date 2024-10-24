@@ -24,17 +24,24 @@ import org.datanucleus.Configuration;
 import org.datanucleus.NucleusContext;
 import org.datanucleus.cache.AbstractLevel2Cache;
 import org.datanucleus.cache.CachedPC;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.concurrent.TimeUnit;
 
+import static io.github.nscuro.datanucleus.cache.caffeine.CaffeineCachePropertyNames.PROPERTY_CACHE_L2_CAFFEINE_EXPIRY_MODE;
 import static io.github.nscuro.datanucleus.cache.caffeine.CaffeineCachePropertyNames.PROPERTY_CACHE_L2_CAFFEINE_INITIAL_CAPACITY;
 import static org.datanucleus.PropertyNames.PROPERTY_CACHE_L2_EXPIRY_MILLIS;
 import static org.datanucleus.PropertyNames.PROPERTY_CACHE_L2_MAXSIZE;
 import static org.datanucleus.PropertyNames.PROPERTY_CACHE_L2_STATISTICS_ENABLED;
 
 public class CaffeineLevel2Cache extends AbstractLevel2Cache {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(CaffeineLevel2Cache.class);
+    private static final String EXPIRY_MODE_AFTER_ACCESS = "after-access";
+    private static final String EXPIRY_MODE_AFTER_WRITE = "after-write";
 
     private final Cache<Object, Object> caffeineCache;
 
@@ -51,7 +58,17 @@ public class CaffeineLevel2Cache extends AbstractLevel2Cache {
             caffeine.initialCapacity(config.getIntProperty(PROPERTY_CACHE_L2_CAFFEINE_INITIAL_CAPACITY));
         }
         if (config.getIntProperty(PROPERTY_CACHE_L2_EXPIRY_MILLIS) > 0) {
-            caffeine.expireAfterWrite(config.getIntProperty(PROPERTY_CACHE_L2_EXPIRY_MILLIS), TimeUnit.MILLISECONDS);
+            final Duration expiryDuration = Duration.ofMillis(config.getIntProperty(PROPERTY_CACHE_L2_EXPIRY_MILLIS));
+
+            if (EXPIRY_MODE_AFTER_ACCESS.equalsIgnoreCase(config.getStringProperty(PROPERTY_CACHE_L2_CAFFEINE_EXPIRY_MODE))) {
+                caffeine.expireAfterAccess(expiryDuration);
+            } else if (EXPIRY_MODE_AFTER_WRITE.equalsIgnoreCase(config.getStringProperty(PROPERTY_CACHE_L2_CAFFEINE_EXPIRY_MODE))) {
+                caffeine.expireAfterWrite(expiryDuration);
+            } else {
+                LOGGER.warn("No expiry mode ({}) configured, assuming {}",
+                        PROPERTY_CACHE_L2_CAFFEINE_EXPIRY_MODE, EXPIRY_MODE_AFTER_ACCESS);
+                caffeine.expireAfterAccess(expiryDuration);
+            }
         }
         if (config.getBooleanProperty(PROPERTY_CACHE_L2_STATISTICS_ENABLED)) {
             caffeine.recordStats();

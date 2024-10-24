@@ -6,5 +6,6 @@
 
     <extension point="org.datanucleus.persistence_properties">
         <persistence-property name="datanucleus.cache.level2.caffeine.initialcapacity"/>
+        <persistence-property name="datanucleus.cache.level2.caffeine.expirymode"/>
     </extension>
 </plugin>
