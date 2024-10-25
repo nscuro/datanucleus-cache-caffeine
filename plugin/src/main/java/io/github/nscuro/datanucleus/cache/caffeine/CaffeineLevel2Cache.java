@@ -31,8 +31,6 @@ import org.slf4j.LoggerFactory;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.HashSet;
-import java.util.Map;
 
 import static io.github.nscuro.datanucleus.cache.caffeine.CaffeineCachePropertyNames.PROPERTY_CACHE_L2_CAFFEINE_EXPIRY_MODE;
 import static io.github.nscuro.datanucleus.cache.caffeine.CaffeineCachePropertyNames.PROPERTY_CACHE_L2_CAFFEINE_INITIAL_CAPACITY;
@@ -129,16 +127,11 @@ public class CaffeineLevel2Cache extends AbstractLevel2Cache {
             return;
         }
 
-        final var keysToEvict = new HashSet<>();
-        for (final Map.Entry<Object, Object> entry : caffeineCache.asMap().entrySet()) {
-            final var pc = (CachedPC) entry.getValue();
-            if (pcClass.getName().equals(pc.getObjectClass().getName())
-                || (subclasses && pcClass.isAssignableFrom(pc.getObjectClass()))) {
-                keysToEvict.add(entry.getKey());
-            }
-        }
-
-        evictAll(keysToEvict);
+        caffeineCache.asMap().values().removeIf(value -> {
+            final var pc = (CachedPC) value;
+            return pcClass.getName().equals(pc.getObjectClass().getName())
+                   || (subclasses && pcClass.isAssignableFrom(pc.getObjectClass()));
+        });
     }
 
     @Override
@@ -172,7 +165,7 @@ public class CaffeineLevel2Cache extends AbstractLevel2Cache {
 
     @Override
     public boolean containsOid(final Object oid) {
-        return caffeineCache.getIfPresent(oid) != null;
+        return caffeineCache.asMap().containsKey(oid);
     }
 
     @Override
